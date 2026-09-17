@@ -8,7 +8,7 @@ function createCustomAlert() {
     }
 
     // 创建弹窗HTML元素
-    const alertHTML = '<div class="modal" id="custom-alert-overlay"><div class="modal-content" id="custom-alert-content"><div class="modal-header"><h3 id="custom-alert-title">提示</h3><button class="close-btn" id="custom-alert-close">&times;</button></div><div class="modal-body"><p id="custom-alert-message"></p></div><div class="modal-footer"><button class="btn btn-primary" id="custom-alert-confirm">确定</button></div></div></div>';
+    const alertHTML = '<div class="modal" id="custom-alert-overlay"><div class="modal-content" id="custom-alert-content"><div class="modal-header"><h3 id="custom-alert-title">提示</h3><button class="close-btn" id="custom-alert-close">&times;</button></div><div class="modal-body"><p id="custom-alert-message" style="word-break: break-all; white-space: pre-line;"></p></div><div class="modal-footer"><button class="btn btn-primary" id="custom-alert-confirm">确定</button></div></div></div>';
 
     // 添加到body
     document.body.insertAdjacentHTML('beforeend', alertHTML);
@@ -49,7 +49,7 @@ function customAlert(message, title = '提示') {
 
     // 设置标题和消息
     titleElement.textContent = title;
-    messageElement.textContent = message;
+    messageElement.textContent = message; // 使用 textContent 避免 message 中的 HTML 被解析执行；换行由元素 CSS white-space: pre-line 渲染
 
     // 显示弹窗
     overlay.classList.add('active');
@@ -179,6 +179,7 @@ function loadEnvVariables() {
         .then(config => {
             // 从配置中获取admin token
             currentAdminToken = config.originalEnvVars?.ADMIN_TOKEN || '';
+            updateLocalDanmuPermission(config);
 
             originalToken = config.originalEnvVars?.TOKEN || '';
             
@@ -393,7 +394,7 @@ function switchSection(section, event = null) {
     }
 
     // 检查是否尝试访问受token保护的section（日志查看、接口调试、推送弹幕、请求记录、系统配置需要token访问）
-    if (section === 'logs' || section === 'api' || section === 'env' || section === 'push' || section === 'request-records') {
+    if (section === 'logs' || section === 'api' || section === 'env' || section === 'push' || section === 'request-records' || section === 'local-danmu') {
         let _reverseProxy = customBaseUrl; // 使用全局配置
 
         // 获取URL路径并提取token
@@ -691,7 +692,7 @@ function updateColorSchemeToggle() {
     const btn = document.getElementById('theme-corner-toggle');
     if (!btn) return;
     const scheme = document.body.dataset.colorScheme || 'light';
-    btn.textContent = scheme === 'dark' ? '☀' : '🌙';
+    btn.innerHTML = uiIcon(scheme === 'dark' ? 'sun' : 'moon');
     btn.title = scheme === 'dark' ? '切换浅色模式' : '切换暗色模式';
 }
 
@@ -717,9 +718,10 @@ const DANMAKU_DICT = [
     '@huangxd-', '@wan0ge', '@woleigedouer', '@Wo254992', '@lilixu3',
     '@Celestials316', '@dyphire', '@piaoyizy', '@xiaoQQya', '@liixing',
     '@goodcommunication', '@Mr-Quin', '@chason-zhao', '@DemoJameson',
-    '@rinnein', '@Lampon', '@zcw199604', 'Mashiro',
+    '@rinnein', '@Lampon', '@zcw199604', 'Mashiro', '@wade6716',
+    '@xlmc', '@mz289', '@sugarbliss',
     '请合理使用', '公益服务请适当调高缓存避免滥用',
-    '有弹幕才有氛围~', '大家陪你看', 'LogVar可能会倒闭但绝对不会变质',
+    '有弹幕才有氛围~', '弹幕陪你看', 'LogVar可能会倒闭但绝对不会变质',
 ];
 
 // 共享弹幕发射间隔 0.5~1.5s

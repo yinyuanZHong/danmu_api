@@ -16,7 +16,9 @@ export function runWithHttpCache(fn) {
 
 // 源调度键名（sourceOrderArr）到日志标签规范名称的映射
 // sourceOrderArr 中部分键名与对应源文件的标签命名不一致（如 360→360kan, imgo→mango）
-// 此映射表统一转换，确保 HTTP 日志标签与源文件内部标签一致
+// 此映射表为本地 fallback，与 sources/registry.js 的 logName 字段保持一致。
+// 注意：http-util.js 是各源依赖的底层工具，不可反向 import registry（会形成
+// http-util → registry → 各源 → http-util 的静态循环依赖），故保留本地表。
 const SOURCE_KEY_TO_LOG_NAME = {
   '360': '360kan',
   'imgo': 'mango',
@@ -61,9 +63,13 @@ function linkSignal(externalSignal, internalController) {
   };
 }
 
+const IS_NODE_RUNTIME = globalThis.__FORWARD_WIDGET__ !== true
+  && typeof process !== 'undefined'
+  && Boolean(process.versions?.node);
+
 // 旧版 Node（<20.19.0，自带 undici 解析响应头时丢弃 Set-Cookie）与 iOS 巨魔（无 WebAssembly、无原生 fetch）改用 node-fetch v3（其 Headers 正常暴露 Set-Cookie）；降级边界与 esm-shim 的 20.19.0 一致，Node >= 20.19.0 仍用原生 fetch。判定仅依赖静态环境、进程内恒定，故模块加载时算一次并缓存。
 function detectNodeFetchDowngrade() {
-  if (typeof WebAssembly === 'undefined') return true;
+  if (!IS_NODE_RUNTIME) return typeof WebAssembly === 'undefined';
   const [major, minor] = process.versions.node.split('.').map(Number);
   return major < 20 || (major === 20 && minor < 19);
 }
@@ -75,8 +81,8 @@ if (USE_NODE_FETCH) {
 }
 
 // 降级分支共享 keep-alive Agent，复用 TCP/TLS 连接以与原生 undici 连接池达到实际等价（消除重复握手开销）；按协议区分 https/http
-const nodeFetchHttpsAgent = USE_NODE_FETCH ? new https.Agent({ keepAlive: true, keepAliveMsecs: 1000, maxSockets: 256 }) : null;
-const nodeFetchHttpAgent = USE_NODE_FETCH ? new http.Agent({ keepAlive: true, keepAliveMsecs: 1000, maxSockets: 256 }) : null;
+const nodeFetchHttpsAgent = USE_NODE_FETCH && IS_NODE_RUNTIME ? new https.Agent({ keepAlive: true, keepAliveMsecs: 1000, maxSockets: 256 }) : null;
+const nodeFetchHttpAgent = USE_NODE_FETCH && IS_NODE_RUNTIME ? new http.Agent({ keepAlive: true, keepAliveMsecs: 1000, maxSockets: 256 }) : null;
 function nodeFetchAgent(parsedUrl) {
   const protocol = parsedUrl instanceof URL ? parsedUrl.protocol : new URL(parsedUrl).protocol;
   return protocol === 'https:' ? nodeFetchHttpsAgent : nodeFetchHttpAgent;
@@ -99,6 +105,8 @@ export async function httpGet(url, options = {}) {
 
   // 从 options 中获取重试次数，默认为 0
   const maxRetries = parseInt(options.retries || '0', 10) || 0;
+  // GET 与 POST 行为保持一致：默认跟随重定向，allow_redirects 为 false 时禁止（用于截获 302 Location）
+  const allow_redirects = options.allow_redirects !== false;
   // 提取允许放行的特定状态码白名单
   const validStatusCodes = Array.isArray(options.validStatusCodes) ? options.validStatusCodes : [];
   let lastError;
@@ -140,7 +148,8 @@ export async function httpGet(url, options = {}) {
             ...options.headers,
           },
           signal: controller.signal,
-          agent: nodeFetchAgent
+          agent: nodeFetchAgent,
+          redirect: allow_redirects ? 'follow' : 'manual'
         });
       } else {
         // 现代浏览器环境
@@ -149,7 +158,8 @@ export async function httpGet(url, options = {}) {
           headers: {
             ...options.headers,
           },
-          signal: controller.signal
+          signal: controller.signal,
+          redirect: allow_redirects ? 'follow' : 'manual'
         });
       }
 
@@ -216,7 +226,18 @@ export async function httpGet(url, options = {}) {
 
         data = decodedData; // 更新解压后的数据
       } else {
-        data = await response.text();
+        // 个别旧站点（如搜狐 videolist）仍返回 GBK；调用方可显式指定编码。
+        if (options.encoding) {
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          let encoding = options.encoding;
+          if (encoding === 'auto') {
+            const contentType = response.headers.get('content-type') || '';
+            encoding = /charset\s*=\s*(gbk|gb2312|big5)/i.exec(contentType)?.[1] || 'utf-8';
+          }
+          data = new TextDecoder(encoding).decode(bytes);
+        } else {
+          data = await response.text();
+        }
       }
 
       let parsedData;

@@ -49,7 +49,7 @@ export const responsiveCssContent = /* css */ `
     }
 
     .header h1 {
-        font-size: 19px;
+        font-size: 21px;
         margin: 0;
     }
 
@@ -214,7 +214,7 @@ export const responsiveCssContent = /* css */ `
 /* ============ 小屏手机 (<= 480px) ============ */
 @media (max-width: 480px) {
     .header h1 {
-        font-size: 18px;
+        font-size: 21px;
     }
 
     .nav-btn {
@@ -236,6 +236,50 @@ export const responsiveCssContent = /* css */ `
     .modal-content {
         padding: 20px;
         border-radius: 16px;
+    }
+}
+
+.search-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+}
+
+/* 手机端：输入框独占第一行，收藏和搜索按钮并排 */
+@media (max-width: 500px) {
+    .search-actions input {
+        flex-basis: 100%;
+        min-width: 100%;
+        order: 1;
+    }
+    .search-actions .favorite-action-btn {
+        flex: 1;
+        order: 2;
+    }
+    .search-actions #manual-search-btn {
+        flex: 1;
+        order: 3;
+    }
+}
+
+/* 剧集操作按钮：PC 窄 120px、平板适中 160px、手机窄 100px */
+.episode-item .btn,
+.jump-episode-btn {
+    max-width: 120px;
+}
+
+@media (min-width: 501px) and (max-width: 768px) {
+    .episode-item .btn,
+    .jump-episode-btn {
+        max-width: 160px;
+    }
+}
+
+@media (max-width: 500px) {
+    .episode-item .btn,
+    .jump-episode-btn {
+        max-width: 100px;
     }
 }
 `;
